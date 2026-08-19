@@ -1,6 +1,6 @@
 ---
 name: dv-collab
-description: 设计与验证（RTL/DV）协作规范，双方共同维护。职责边界（绝对隔离：设计不改 sim 验证平台、验证不读不改 RTL；rtl_sim/ 仿真模型豁免归验证侧）、工程结构示例（rtl/rtl_sim/rtl_ref/sim/doc/work）、只通过文档沟通且文档不清先提问补充、四份 YAML 交接契约（spec/bug/gap/question，严谨字段规范见 references/）、#0.1 风格下 TB 采样相位纪律、bug 交接流程（reproduced 门槛、设计独立定根因、修复回执、状态归属与四段复验）。只定义交接规则；design-flow 产设计侧文件、sim-flow 产验证侧文件
+description: 设计与验证（RTL/DV）协作规范，双方共同维护。职责边界（绝对隔离：设计不改 sim 验证平台、验证不读不改 RTL；rtl/sim/ 仿真模型豁免归验证侧）、工程结构示例（rtl/{design,sim,ref}+sim+doc+migration+work）、只通过文档沟通且文档不清先提问补充、四份 YAML 交接契约（spec/bug/gap/question，严谨字段规范见 references/）、#0.1 风格下 TB 采样相位纪律、bug 交接流程（reproduced 门槛、设计独立定根因、修复回执、状态归属与四段复验）。只定义交接规则；design-flow 产设计侧文件、sim-flow 产验证侧文件
 whenToUse: 当任务涉及 RTL 设计与仿真验证两侧的分工、bug 归属判定、TB 与 DUT 交互约定、设计/验证文档交接时
 ---
 
@@ -19,7 +19,7 @@ whenToUse: 当任务涉及 RTL 设计与仿真验证两侧的分工、bug 归属
   - **唯一例外**：无设计文档且无设计角色可问时（如单人项目），验证侧允许
     读 RTL，但所得结论一律标注为"推断"，逐条登记进 `question.yaml`
     （`source: rtl_inference`，默认 blocking=true），待设计口径确认后关闭。
-- **唯一豁免目录——`rtl_sim/`（验证专用仿真模型）**：该路径下的 RTL 级
+- **唯一豁免目录——`rtl/sim/`（验证专用仿真模型）**：该路径下的 RTL 级
   文件（行为模型、黑盒替代物，如 p380_model.sv）仅供验证使用，**验证侧
   可以查看与修改**；可综合设计代码不放此目录。
 - 跨侧访问唯一许可：**用户显式指定的文件，且只读不改**；读后结论落入文档，
@@ -29,9 +29,10 @@ whenToUse: 当任务涉及 RTL 设计与仿真验证两侧的分工、bug 归属
 
 ```
 <proj>/
-├── rtl/        # 可综合设计代码（设计侧独占）
-├── rtl_sim/    # 验证专用仿真模型（行为模型/黑盒，验证侧可查看可修改）
-├── rtl_ref/    # vendor IP（通常不入库，gitignore）
+├── rtl/        # RTL 相关统一收此目录，内部三段分角色：
+│   ├── design/ # 可综合设计代码（设计侧独占）
+│   ├── sim/    # 验证专用仿真模型（行为模型/黑盒，验证侧可查看可修改）
+│   └── ref/    # vendor IP（通常不入库，gitignore）
 ├── sim/        # 验证平台（TB/参考模型/用例/flist，验证侧独占）
 ├── doc/        # 全部设计文档与验证文档——双方沟通的唯一媒介
 │   ├── md/     # 叙事文档（设计说明、bug 分析、报告），给人看
@@ -41,8 +42,9 @@ whenToUse: 当任务涉及 RTL 设计与仿真验证两侧的分工、bug 归属
 └── work/       # scratch/临时产物（gitignore）
 ```
 
-要点：文档全部集中 `doc/`（含架构图，不散放根目录）；仿真模型不放 `rtl/`
-下，避免设计/验证文件混放；flist 中按"rtl + rtl_ref + rtl_sim"三段组织
+要点：文档全部集中 `doc/`（含架构图，不散放根目录）；仿真模型统一收
+`rtl/sim/`、不放 `rtl/design/` 下，避免设计/验证文件混放；flist 中按
+"rtl/design + rtl/ref + rtl/sim"三段组织
 并注释各自角色；**工程迁移（导出/导入迁移包）一律调用 project-migration
 skill**，迁移包固定放 `migration/`（gitignore），与 `work/` 的临时产物
 分开；**流程规范类 skill 不放工程目录**，统一在用户级 skill 目录
