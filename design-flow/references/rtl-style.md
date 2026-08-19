@@ -1,15 +1,8 @@
----
-name: sv-rtl-style
-description: SystemVerilog RTL 代码风格规范，生成或修改 RTL 代码时必须遵循；涵盖文件结构、时序 #0.1、always 块拆分、generate for 寄存器组、显式位宽、组合逻辑、例化对齐、命名习惯、注释风格等通用规则
-whenToUse: 当用户要求编写、修改或 review SystemVerilog/Verilog RTL 代码时
----
-
-# SystemVerilog RTL 代码风格规范
+# SystemVerilog RTL 代码风格规范（原 sv-rtl-style skill，2026-08-19 融入 design-flow）
 
 通用 RTL 编码风格，生成或修改 SystemVerilog 代码时遵循。
 
-> 新增条目为既有实践的文档化整理，现有代码（hmc_v2/rtl_v3 等）已遵循，
-> 新增内容不需要修改既有代码。
+> 条目为既有实践的文档化整理，既有代码已遵循，新增内容不需要修改既有代码。
 
 ## 1. 文件结构
 
@@ -17,7 +10,7 @@ whenToUse: 当用户要求编写、修改或 review SystemVerilog/Verilog RTL �
 - 一个文件一个 module；文件名与模块名一致。
 - 文件头注释块：`File / Module / Description` + 功能说明。
 - **不使用 include guard**（`ifndef/`define），由 filelist 管理编译。
-- 功能块用编号注释分区（如 F1/F2…、R1/R2…、L1~L7），块间 `//=====` 分隔线。
+- 功能块用编号注释分区（功能前缀+编号，如 F1/F2…、R1/R2…），块间 `//=====` 分隔线。
 
 ## 2. 时序逻辑
 
@@ -43,25 +36,49 @@ whenToUse: 当用户要求编写、修改或 review SystemVerilog/Verilog RTL �
 - `wire` 允许声明即赋值：`wire a = b & c;`（等价于先声明后 assign）。
 - **禁止 `logic a = b & c;`**——那是 t=0 初值不是连续赋值，会藏 bug。
 
-## 5. 例化格式
+## 5. 握手纪律（valid/ready）
+
+- **总原则——默认完全独立**：valid 反映"我要发"、ready 反映"我能收"，各自
+  只反映自身状态，**两个方向都默认不互相依赖**；只在结构性场景允许依赖：
+  - ready←valid：合法、不锁死（依赖单边化，等待链必终止），仅用于仲裁/
+    译码/fork/门控等结构性需要处，并注释原因，不为省事随手写；
+  - valid←ready：禁止（唯一例外是下述原子 fork 中"看对方 ready"的固有依赖）。
+- **valid 不等自己的 ready**：驱动给下游的 valid 不得组合依赖本通道的 ready
+  （AXI A3.2.1：source 不允许等 ready 再置 valid）；ready 组合看 valid 仅
+  是 AXI 合法方向，默认仍应独立（见总原则）。valid←ready 违反则"无环"寄托
+  在对端实现上：对端 ready 一旦也看 valid（换 FIFO 变体、插入 ready=f(valid)
+  的流水级）即成环锁死，且编译不报错；此外反压期间 valid 被抹掉，波形上
+  看不到出价点，不利 debug。
+- **offer/fire 分离**：驱动 FIFO 等下游的 wvalid 用 offer（不含对方 wready）；
+  成交（fire = valid && ready）只用于内部状态推进/旁路判定，不直接当下游
+  valid。写 FIFO 的压入集合 = offer && wready，与"fire 直驱 wvalid"逐项
+  等价时可无条件改用 offer 形式。
+- **原子多推 fork 例外**：一笔数据须同拍压入多个目的地（如命令 FIFO +
+  顺序表）时，各目的地 valid 允许含**对方**的 ready（fork 固有依赖，删不
+  掉）；前提是所有对方 ready 独立于其 valid（如 reg_fifo 的 wready=~full），
+  保持依赖图无环。
+- credit 式门控是合法方向：发射 valid 可被"资源有空位"门控（如"标志
+  FIFO 未满"门控下游 valid）——这是 valid 看**第三方**的 ready，不属违规。
+
+## 6. 例化格式
 
 - 参数（`#(...)`）一行一个；端口连接一行一个；
 - `.` / 端口名 / `(` / 连接信号 / `)` 按列对齐（列宽按实例最长名，约 20 字符）；
-- 端口分组间加分区注释行（如 `//---- native 读命令 → router ----`）；
+- 端口分组间加分区注释行（如 `//---- 读命令通路 ----`）；
 - 空接输出写 `.almost_full(  )` 形式，括号列保持对齐。
 
-## 6. 命名
+## 7. 命名
 
 - **`_q`**：寄存器输出（flip-flop Q 端）——由 `always_ff` 驱动，综合出 FF，跳变对齐时钟沿；
 - **`_c`**：组合逻辑信号（combinational）——由 `assign`/`always_comb` 驱动，周期内可能毛刺；
 - **`_n`**：低有效信号（如 `rst_n`）；
 - 用途：读代码/波形时立刻知道时序性质；名字与实现不符（`_q` 不是寄存器、`_c` 推出 latch）即为风格违例，review 必查。
-- **存储结构一律叫 fifo**（rcmd_fifo / wcmd_fifo / rfifo / bfifo / rd_fifo / flag FIFO / b FIFO），不用 `*_buf`；深度参数 `*_FIFO_DEPTH`。
-- 配置信号短缩写：`cfg_granu`（不用 granularity 全拼），同类缩写保持简短。
-- 时钟复位：顶层 `clk`/`rst_n`；子时钟域 `<域>_clk`/`<域>_rst_n`（如 `smc_clk`/`smc_rst_n`）。
-- 打拍/skid 功能直接例化 avr 单元（avr_rs/avr_frs），信号与实例不自称 skid。
+- **存储结构一律叫 fifo**（cmd_fifo / data_fifo / flag FIFO 等），不用 `*_buf`；深度参数 `*_FIFO_DEPTH`。
+- 配置信号用 `cfg_` 前缀+短缩写（如 `cfg_granu`，不用 granularity 全拼），同类缩写保持简短。
+- 时钟复位：顶层 `clk`/`rst_n`；子时钟域 `<域>_clk`/`<域>_rst_n`（如 `apb_clk`/`apb_rst_n`）。
+- 打拍/skid 功能直接例化项目复用库单元（如 avr_rs/avr_frs），信号与实例不自称 skid。
 
-## 7. 注释与文档风格
+## 8. 注释与文档风格
 
 - 注释用中文，说明"为什么"而非复述代码；代码、信号名用原文。
 - **模块头部注释块按序组织**：`File/Module/Description` → 【微架构】（一段话讲清数据通路与关键决策）→ 【功能块】编号列表 → 【连接关系】简图 → 【命名原则】（信号多的大模块才需要）→ 【接口格式 / 地址映射 / 行为假设】（按模块需要，假设用 ①②③ 编号）→ 【依赖】。
@@ -69,7 +86,7 @@ whenToUse: 当用户要求编写、修改或 review SystemVerilog/Verilog RTL �
 - **关键控制信号的注释放在定义/使用处**：逐行说明功能与所属功能块；**不做集中式信号速查表**（与实现两处维护易失步，已否决）。
 - 待确认/占位事项在注释中明确留痕（"待厂商确认""占位"），并同步进设计文档的开放问题清单。
 
-## 8. 其他通用建议
+## 9. 其他通用建议
 
 - `case` 必写 `default`；状态机状态用 `typedef enum logic [N-1:0] {...}`。
 - 模块对外参数用 `parameter int`，模块内部派生常量用 `localparam int`。
@@ -81,7 +98,7 @@ whenToUse: 当用户要求编写、修改或 review SystemVerilog/Verilog RTL �
 - FIFO/存储一律例化库单元，不手写环形缓冲。
 - 常数除法（如 ÷5/mod 5）先用 `/`、`%` 表达，并注释"时序不收则换 magic multiply"。
 
-## 9. 协作约定
+## 10. 协作约定
 
 - 代码修改只在用户明确要求时进行；讨论阶段不动代码。
 - git 提交（及任何 git 变更）只在用户明确要求时执行。
