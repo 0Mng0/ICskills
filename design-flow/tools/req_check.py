@@ -4,13 +4,15 @@
 # 检查项（对应 design-flow §2 G1 机检单）:
 #   1. 每条 REQ 四要素齐全（id=REQ-\d{3}、需求/来源非空、优先级 P0|P1|P2）
 #   2. 需求列无"等/若干/尽量"类模糊词（白名单: 等价/不等/等待/停等）
-#   3. 假设清单存在且逐条有处置（含"确认"或 QUE- 引用或 REQ- 回指）
-#   4. 结构: 每个分类小节有导读行（无表格时须显式写"无"）；REQ-id 全局唯一；
-#      全文引用的 REQ-id 均存在
+#   3. 假设清单存在且逐条有处置（含"确认"或 QUE-/REQ- 引用）
+#   4. 树形结构: 每个 ### 大类有"功能全集定义"句；每个 #### 叶子有导读行、
+#      编号 N.M 与大类一致、空类显式写"无"（无表格或表格无 REQ 行）；
+#      REQ 行只出现在 #### 叶子表格中；REQ-id 全局唯一；全文引用的 REQ-id
+#      均存在
 import re
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")  # Windows 控制台默认 GBK，统一按 UTF-8 输出
+sys.stdout.reconfigure(encoding="utf-8")  # Windows 控制台默认 GBK，统一 UTF-8 输出
 
 FUZZY = ("若干", "尽量")
 ALLOW_PREV = ("不", "停")   # 不等、停等
@@ -34,22 +36,44 @@ def main(path):
         sys.exit(1)
     chap = lines[start:end] if end else lines[start:]
 
-    # ---- 收集 REQ 表格行与分类小节 ----
+    # ---- 收集结构：### 大类 / #### 叶子 / REQ 行 ----
     req_rows = []   # (行号, [cell, ...])
-    sections = []   # [行号, 标题, [(行号, 行)]]
-    cur = None
+    l1secs = []     # [行号, 编号, 标题, 全集定义句|None]
+    leaves = []     # [行号, N, M, 标题, 父编号|None, 导读|None, 有表格, REQ行数]
+    cur_l1 = None
+    cur_leaf = None
     for j, ln in enumerate(chap):
         lnno = start + 1 + j
-        m = re.match(r"^###\s+\d+\.\s*(.*)", ln)
-        if m:
-            cur = [lnno, m.group(1).strip(), []]
-            sections.append(cur)
+        m1 = re.match(r"^###\s+(\d+)\.\s*(.*)", ln)
+        m2 = re.match(r"^####\s+(\d+)\.(\d+)\s*(.*)", ln)
+        if m1:
+            cur_l1 = [lnno, m1.group(1), m1.group(2).strip(), None]
+            l1secs.append(cur_l1)
+            cur_leaf = None
             continue
-        if cur is not None:
-            cur[2].append((lnno, ln))
+        if m2:
+            cur_leaf = [lnno, m2.group(1), m2.group(2), m2.group(3).strip(),
+                        cur_l1[1] if cur_l1 else None, None, False, 0]
+            leaves.append(cur_leaf)
+            continue
         if ln.lstrip().startswith("| REQ-"):
             cells = [c.strip() for c in ln.strip().strip("|").split("|")]
             req_rows.append((lnno, cells))
+            if cur_leaf is None:
+                fails.append(f"L{lnno}: REQ 行不在任何 #### 叶子内"
+                             f"（每条 REQ 须恰好归属一个叶子）")
+            else:
+                cur_leaf[7] += 1
+            continue
+        if ln.strip().startswith("|"):
+            if cur_leaf is not None:
+                cur_leaf[6] = True
+            continue
+        if ln.strip() and not ln.startswith("#"):
+            if cur_leaf is not None and cur_leaf[5] is None and not cur_leaf[6]:
+                cur_leaf[5] = ln.strip()
+            elif cur_leaf is None and cur_l1 is not None and cur_l1[3] is None:
+                cur_l1[3] = ln.strip()
 
     # ---- 检查 1: 四要素齐全 + id 唯一 ----
     defined = {}
@@ -110,14 +134,18 @@ def main(path):
         if items == 0:
             fails.append("假设清单无编号条目")
 
-    # ---- 检查 4: 结构与引用闭合 ----
-    for lnno, title, body in sections:
-        guide = [l for _, l in body if l.strip() and not l.strip().startswith("|")]
-        has_table = any(l.strip().startswith("|") for _, l in body)
-        if not guide and has_table:
-            fails.append(f"L{lnno}: 小节『{title}』缺导读行")
-        if not has_table and not any("无" in l for l in guide):
-            fails.append(f"L{lnno}: 小节『{title}』无表格且未显式写『无』")
+    # ---- 检查 4: 树结构与引用闭合 ----
+    for lnno, num, title, guide in l1secs:
+        if not guide:
+            fails.append(f"L{lnno}: 大类『{num}. {title}』缺『功能全集定义』句")
+    for lnno, n, m_, title, parent, guide, has_tbl, nreq in leaves:
+        if parent is not None and n != parent:
+            fails.append(f"L{lnno}: 叶子编号 {n}.{m_} 与大类 {parent} 不一致")
+        if not guide:
+            fails.append(f"L{lnno}: 叶子『{n}.{m_} {title}』缺导读行")
+        if not has_tbl or nreq == 0:
+            if "无" not in (guide or ""):
+                fails.append(f"L{lnno}: 叶子『{n}.{m_} {title}』无 REQ 行且未显式写『无』")
     for i, ln in enumerate(lines):
         for rid in re.findall(r"REQ-\d{3}", ln):
             if rid not in defined:
@@ -125,7 +153,7 @@ def main(path):
 
     for msg in fails:
         print("FAIL:", msg)
-    print(f"req_check: {len(defined)} 条 REQ, {len(sections)} 个分类小节, "
+    print(f"req_check: {len(defined)} 条 REQ, {len(l1secs)} 个大类, {len(leaves)} 个叶子, "
           + ("全部通过" if not fails else f"{len(fails)} 项失败"))
     sys.exit(1 if fails else 0)
 
