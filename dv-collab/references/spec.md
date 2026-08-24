@@ -89,8 +89,10 @@ registers:                    # 无寄存器模块整节省略
 out_of_scope:                 # 明确本模块不负责的行为，防验证越界
   - "不检查输入数据的协议上层含义"
 
-open_questions:               # 设计侧未定项；验证侧逐条登记进 question.yaml
-  - "连续两个请求的最低间隔尚未确定"
+open_questions:               # 验证提问闭环台账：影响本 spec 且未关闭的 QUE-id
+                              #（QUE 生命周期与闭环判据见 question.md；
+                              #  设计侧假设走 doc/md 功能提问文档，不入此段）
+  - "QUE-003：影响 IF-IN 间隔约定，待设计侧答复"
 ```
 
 ## 验证侧验收清单（收到后先过一遍再动手）
@@ -99,4 +101,5 @@ open_questions:               # 设计侧未定项；验证侧逐条登记进 qu
 - [ ] 每个接口四要素齐全；`nba_style` 已确认
 - [ ] 每条 contract / function 都是可判定语句且有可观测点
 - [ ] illegal_inputs 无遗漏（至少显式写过"未定义"）
-- [ ] open_questions 已全部登记进 `question.yaml`
+- [ ] open_questions 闭环对照：status=open 且影响 spec 的 QUE 均在台账；
+      台账 QUE-id 在 `question.yaml` 中存在；已 confirmed 的 QUE 已从台账移除

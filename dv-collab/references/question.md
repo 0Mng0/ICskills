@@ -17,6 +17,12 @@
 5. **例外场景标记**：无设计文档/无设计角色时验证侧读 RTL 得出的结论，
    `source: rtl_inference`，默认 blocking=true（未经设计口径确认前，
    一律按可能影响 checker 处理）。
+6. **闭环判据（与 spec.yaml `open_questions` 台账对照）**：影响 spec 且
+   未关闭的 QUE 必须列入 spec.yaml `open_questions` 段；QUE 只有在答复被
+   spec 升版吸收（`status_ref` 指向新版条款、change_summary 引用 QUE-id）
+   或明确标注"无需升版"后，才允许标 confirmed；关闭即出台账。机检对照：
+   open 且影响 spec 的 QUE ⊆ 台账；台账 QUE-id 在本文件存在；confirmed
+   的已出台账。
 
 ## 字段规范
 
