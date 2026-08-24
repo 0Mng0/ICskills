@@ -25,22 +25,28 @@ whenToUse: 当任务涉及 RTL 设计与仿真验证两侧的分工、bug 归属
 - 跨侧访问唯一许可：**用户显式指定的文件，且只读不改**；读后结论落入文档，
   不在对方侧留任何改动。
 
-## 2. 工程结构示例（后续工程参考）
+## 2. 工程结构（定稿，后续工程一律按此）
 
 ```
 <proj>/
 ├── rtl/        # RTL 相关统一收此目录，内部三段分角色：
 │   ├── design/ # 可综合设计代码（设计侧独占）
 │   ├── sim/    # 验证专用仿真模型（行为模型/黑盒，验证侧可查看可修改）
-│   └── ref/    # vendor IP（通常不入库，gitignore）
+│   └── ref/    # 复用库单元 / vendor IP（工程自有库单元入库；vendor IP 通常 gitignore）
 ├── sim/        # 验证平台（TB/参考模型/用例/flist，验证侧独占）
 ├── doc/        # 全部设计文档与验证文档——双方沟通的唯一媒介
-│   ├── md/     # 叙事文档（设计说明、bug 分析、报告），给人看
+│   ├── md/     # 叙事文档（功能说明/架构设计/功能提问、bug 分析、报告），给人看
 │   └── yaml/   # 四份交接契约（唯一事实源）：
 │               #   spec.yaml / bug.yaml / gap.yaml / question.yaml
+├── tools/      # 机检脚本（init 时拷入 / 工程自建）
 ├── migration/  # 工程迁移包专区（MIGRATION.md/migration-map.json/files/）
 └── work/       # scratch/临时产物（gitignore）
 ```
+
+新工程骨架用 `tools/init_project.py <工程根>`（本 skill 自带）创建：
+幂等（已存在跳过，哪侧流程先触发都行），生成目录树 + .gitignore，
+`--git` 可选建仓库。设计侧视角无缺失目录；图文件（drawio 等）放
+doc/md 同目录，不单独设目录。
 
 要点：文档全部集中 `doc/`（含架构图，不散放根目录）；仿真模型统一收
 `rtl/sim/`、不放 `rtl/design/` 下，避免设计/验证文件混放；flist 中按
