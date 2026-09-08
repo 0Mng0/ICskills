@@ -40,8 +40,8 @@ verification_points:
    `source: verification_risk` 并写明理由。
 2. 一个 VP 可挂多个 checker/testcase；一个 testcase 可覆盖多个 VP，
    但每个 VP 至少要有一个 testcase。
-3. `status: closed` 的前提：对应 checker 已证伪验证（反向用例能抓错）、
-   用例在最近回归中 pass。
+3. `status: closed` 的前提：对应 checker 已证伪或已豁免（规则见
+   stimulus-and-checker.md 证伪节）、用例在最近回归中 pass。
 4. blocked 的 VP 不许静默搁置：`blocked_by` 必须引用具体 BUG-*/QUE-*。
 5. 接口升版（spec version 变化）后，按 change_summary 重审
    受影响 VP，状态回退到 open。

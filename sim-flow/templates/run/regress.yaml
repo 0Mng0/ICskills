@@ -1,0 +1,48 @@
+# regress.yaml —— regress.py 配置（init_sim.py 渲染 __MODULE__/__TOPLEVEL__ 后落位）
+# 所有相对路径均相对本文件（sim/run/）所在目录。
+
+module: __MODULE__
+project_root: ../..
+sim: verilator                # DUT 为 #0.1 NBA 风格时用 verilator --timing
+toplevel: __TOPLEVEL__
+test_module: tests.test_smoke # 默认测试模块（用例可用 module 覆盖）
+
+rtl_flist: ../../rtl/sim_rtl.f    # 设计侧给的 flist（dv-collab 工程结构）
+extra_sources: []
+includes: []
+defines: {}
+parameters: {}
+build_args:
+  - "--timing"              # DUT `<= #0.1` 延时语句
+  - "-Wno-fatal"            # rtl/ref vendor 代码良性位宽告警不致死（视工程增减）
+  - "--trace"
+  - "--trace-structs"
+  - "-CFLAGS"               # MSYS2 GCC16 -Os 触发 libstdc++ 导出缺失，-O2 规避
+  - "-O2"
+  - "-LDFLAGS"              # 静态 VPI 库不带传递依赖，显式链接 mingw 版 GPI DLL
+  - "-l:gpi.dll -l:gpilog.dll -l:cocotb.dll -l:cocotbutils.dll"
+timescale: ["1ns", "1ps"]   # 含亚 ns 相位（NBA 0.1ns=100ps）时需要 ps 精度
+pythonpath: [".."]          # 让 tests / tb 包可 import
+
+waves_default: false
+timeout: 600
+
+logs_dir: logs
+build_dir: sim_build
+test_root: run
+
+spec: ../../doc/yaml/spec.yaml
+vp_table: ../vp_table.yaml
+status: ../status.yaml
+# question: ../../doc/yaml/question.yaml   # 可选：配置后 status.yaml open_issues 自 question.yaml 派生
+
+# 项目 checker / 仿真模型若有专属报警格式，追加进 fail_patterns
+fail_patterns:
+  - 'Traceback \(most recent call last\)'
+  - 'SCOREBOARD\s+RESIDUE'
+  - '\bFATAL\b'
+  - '%Error'
+  - '\berror:'
+
+cases:
+  - { name: smoke, module: tests.test_smoke, testcase: smoke, seed: fixed, timeout: 600 }

@@ -1,0 +1,47 @@
+# regress.yaml —— regress.py 配置样例（拷至 sim/run/ 后按工程适配）
+# 所有相对路径均相对本文件所在目录。无 PyYAML 时本文件可整体写成 JSON。
+
+module: mymod                # 被验模块名（进 status.yaml）
+project_root: ../..          # 工程根（用于 git 环境指纹）
+sim: icarus                  # icarus | verilator
+toplevel: mymod_top          # DUT 顶层（以 spec.yaml module.top 为准）
+test_module: tb.test_smoke   # cocotb 测试模块（python 模块路径，可被用例 module 覆盖）
+
+rtl_flist: ../../rtl/sim_rtl.f   # 设计侧给的 flist（受支持子集见 regress.py parse_flist）
+extra_sources: []            # 验证侧补充源（如 rtl/sim/ 下仿真模型，逐文件列出）
+includes: []                 # 额外 include 目录
+defines: {}
+parameters: {}
+build_args: []               # 额外编译参数。verilator + MSYS2 GCC16 时需：
+                             #   ["--trace", "--trace-structs",
+                             #    "-CFLAGS", "-O2",
+                             #    "-LDFLAGS", "-l:gpi.dll -l:gpilog.dll -l:cocotb.dll -l:cocotbutils.dll"]
+timescale: ["1ns", "1ps"]
+pythonpath: [".."]           # 让 test_module 可 import（相对本文件）
+
+waves_default: false         # verilator 波形需编译期开启，打开会触发重编
+timeout: 300                 # 每用例超时秒数（挂死判 incomplete）
+
+logs_dir: logs
+build_dir: sim_build
+test_root: run               # 每用例独立运行目录（results.xml / 波形落此处）
+
+spec: ../../doc/yaml/spec.yaml       # 用于 spec_baseline 自动填写
+vp_table: ../vp_table.yaml           # 用于 vp_summary 计数（无则省略）
+status: ../status.yaml
+# question: ../../doc/yaml/question.yaml   # 可选：配置后 open_issues 自动派生
+
+# 四态分类正则（缺省用 regress.py 内置值；项目 checker 有专属报警格式时在
+# fail_patterns 追加，如 "\\[CHECKER\\].*ALARM"）
+# fail_patterns: [...]
+# pass_patterns: [...]
+# interrupt_patterns: [...]
+
+cases:
+  # 定向用例：seed: fixed，只跑一次，日志 logs/smoke_fixed.log
+  - { name: smoke, testcase: test_smoke.smoke, seed: fixed }
+  # 随机用例：seed: random，repeat 次，每次现取 seed 进日志名
+  # - { name: tc_rand_bp, module: tb.test_rand, testcase: test_rand.tc_rand_bp,
+  #     seed: random, repeat: 10, timeout: 600 }
+  # 复现用例：seed 钉死
+  # - { name: tc_bug001_replay, testcase: test_replay.tc_bug001, seed: 12345 }

@@ -1,6 +1,6 @@
 ---
 name: design-flow
-description: RTL 设计侧流程规范（专用于设计，随工程演进持续补充各阶段过程）。当前含：契约先行的设计动作流（叙事文档→spec.yaml 正向提取→RTL 以契约为准→变化先升版再改码）、阶段门模型（L0→L1→L2，G1 硬门必须人审/G2G3 软门显式提问，独立提交过门+stage/commit_id 锚定）、功能点覆盖完整性三层保证（A 正向 source 双向差集映射/B 验证侧独立提取/C 正交检查单+VP 反挂闭环）、设计文档更新提问纪律（发现功能模糊或规格 bug 先问人再改）、架构设计方法（references/arch-design.md，原 hw-arch-design 融入）、RTL 代码风格（references/rtl-style.md，原 sv-rtl-style 融入）。与 dv-collab（两侧边界与交接）互补
+description: RTL 设计侧流程规范（专用于设计，随工程演进持续补充各阶段过程）。当前含：契约先行的设计动作流（叙事文档→spec.yaml 正向提取→RTL 以契约为准→变化先升版再改码；人工修改通道：人直接改码允许先码后文追赶，AI 仍契约先行）、阶段门模型（L0→L1→L2，G1 硬门必须人审/G2G3 软门显式提问，独立提交过门+stage/commit_id 锚定）、功能点覆盖完整性三层保证（A 正向 source 双向差集映射/B 验证侧独立提取/C 正交检查单+VP 反挂闭环）、设计文档更新提问纪律（发现功能模糊或规格 bug 先问人再改）、架构设计方法（references/arch-design.md，原 hw-arch-design 融入）、RTL 代码风格（references/rtl-style.md，原 sv-rtl-style 融入）。与 dv-collab（两侧边界与交接）互补
 whenToUse: 设计侧产出或更新接口规格/功能契约（spec.yaml）、过阶段门、评估功能点覆盖是否完整、更新设计文档、做架构方案/模块划分/接口设计、编写/修改/review SystemVerilog RTL 代码、或执行其他设计流程类任务时
 ---
 
@@ -20,11 +20,21 @@ whenToUse: 设计侧产出或更新接口规格/功能契约（spec.yaml）、�
    `references/spec.md`）——功能点清单 = 文档的结构化目录，
    每条 FUNC/contract 用 `source` 字段回指文档条款（条款号/节号）；
 3. RTL 以 yaml 功能点为**实现准绳**；禁止用 RTL 当前行为反写或删减
-   契约（契约表达设计意图，不是实现快照）；
+   契约（契约表达设计意图，不是实现快照）。**允许以 RTL 模块头注释
+   （【微架构】【功能块】【行为假设】等）做 yaml 齐全性兜底对照**：
+   头注释中有而叙事文档缺失的功能描述，先按
+   §5 提问并回写叙事文档、再从文档提取进 yaml——RTL 注释只作差集
+   来源，不作 source；与文档冲突时以文档为准并提问；
 4. 行为任何变化：**先升版 yaml（version + change_summary），再改 RTL**；
-   验证侧按版本 re-baseline 回归范围；
+   验证侧按版本 re-baseline 回归范围。**人工修改通道**：
+   人在工程外直接修改 RTL 时，允许先改码、后追赶同步（升版 yaml + 叙事
+   文档 + RTL 注释一并追上），不以"先升版再改码"阻塞人工修改；此通道
+   仅适用于人工修改——AI 代理发起的一切行为变化仍须契约先行；
 5. yaml 内容由设计侧手写；工具只做机械校验（schema 字段齐全、ID 唯一、
-   引用闭合、条款↔FUNC 对照），不代替人写内容。
+   引用闭合、条款↔FUNC 对照），不代替人写内容；
+6. RTL 交付同时维护 `rtl/` 下 flist（如 `sim_rtl.f`）：
+   新增/删除/重命名 RTL 文件时同步更新，供验证/仿真参考（验证侧可
+   不使用，黑盒纪律不变）。
 
 ## 2. 阶段模型与过门（OpenTitan 模式）
 
@@ -36,7 +46,7 @@ whenToUse: 设计侧产出或更新接口规格/功能契约（spec.yaml）、�
    改动），提交信息列检查单逐条结果与依据——评审即审查该提交；
 3. **commit 锚定**：过门点在 `spec.yaml` 的 `doc` 区记录 `stage` 与
    `commit_id`，任何时刻可重建"哪版规格对应哪版代码"；
-4. **审核分级（2026-08-19 用户定）**：**G1 为硬门，必须人审**，机检
+4. **审核分级**：**G1 为硬门，必须人审**，机检
    全过不豁免；**G2/G3 为软门，推荐人审**——过门时必须向用户
    **明确提问**"本门是否需要人工审核？"：需要则评审通过才过门；
    不需要则机检通过即过门。提问与用户的决定必须记入该次过门提交
@@ -181,15 +191,21 @@ draft ──G1──▶ req_confirmed ──G2──▶ arch_reviewed ──G3�
    验证回流问题涉及规格变化）时，**第一时间向人提问"是否需要更新
    设计文档"**，说明发现点与影响面；人不确认，不动功能性内容
    （typo/格式类修改不在此列）；
-2. **确认后的更新顺序**：先改叙事文档（留修订记录）→ 升版
+2. **确认后的更新顺序**：先改叙事文档 → 升版
    `spec.yaml`（version + change_summary，先升版再改码）→ RTL/契约
-   同步 → 相关 question/gap 条目闭环回填；
+   同步 → 相关 question/gap 条目闭环回填。
+   **修订说明由提交信息承载（git 即历史）**——叙事
+   文档与 RTL 注释只描述当前行为，不写日期/版本考古类修订记录与内联
+   日期标注（既有台账已在 git 历史版本中）；每项变更的动机、条款号、
+   决策归因（"用户定"等）写进该次独立提交的信息。例外：当前状态类
+   标注保留（待厂商确认、开放问题、REQ 废止编号等），spec.yaml 的
+   `change_summary` 升版台账保留（§1.4 契约纪律）；
 3. **触发源**：设计实现自查发现、question.yaml 回流（歧义答复被
    吸收）、bug.yaml 判 spec_ambiguity、gap.yaml accepted 落地；
 4. **留痕**：文档更新独立成 commit，`change_summary` 与实际 diff
    一致；升版评审为软门，按 §2 审核分级提问决定。
 
-## 6. 架构设计方法（原 hw-arch-design，2026-08-19 融入）
+## 6. 架构设计方法
 
 做架构方案、模块划分、接口设计时遵循
 [`references/arch-design.md`](references/arch-design.md)——做该类工作
@@ -202,7 +218,7 @@ draft ──G1──▶ req_confirmed ──G2──▶ arch_reviewed ──G3�
 
 阶段 0 的结构化提问与 G2 机检的"检查单三态"即按该文件执行。
 
-## 7. RTL 代码风格（原 sv-rtl-style，2026-08-19 融入）
+## 7. RTL 代码风格
 
 生成、修改或 review SystemVerilog RTL 代码时遵循
 [`references/rtl-style.md`](references/rtl-style.md)——动手写/改 RTL 前

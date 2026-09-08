@@ -1,6 +1,6 @@
 ---
 name: sim-flow
-description: cocotb 验证仿真平台搭建方法论。根据设计文档与 spec.yaml 搭建 cocotb 验证平台时使用：验证点表（VP 五要素）、平台固定搭建顺序（driver/monitor/参考模型/scoreboard）、checker 证伪、用例分层（定向/边界/随机）、回归纪律（seed 记录、日志实质判定、四态分类、失败先复现）、覆盖洞分类、status.yaml 状态追踪、B 层独立提取与 gap.yaml 对接（对照清单三态分流、gap 落地挂接 VP）。与 dv-collab 配套：输入是它的交接契约，输出是 bug.yaml。
+description: cocotb 验证仿真平台搭建方法论。根据设计文档与 spec.yaml 搭建 cocotb 验证平台时使用：验证点表（VP 五要素）、平台固定搭建顺序（driver/monitor/参考模型/scoreboard）、checker 证伪、用例分层（定向/边界/随机）、回归纪律（seed 记录、日志实质判定、四态分类、失败先复现）、回归执行器 regress.py（四态分类/status.yaml 自动更新）、覆盖洞分类、status.yaml 状态追踪、B 层独立提取与 gap.yaml 对接（对照清单三态分流、gap 落地挂接 VP）。与 dv-collab 配套：输入是它的交接契约，输出是 bug.yaml。
 whenToUse: 当任务涉及搭建或扩展 cocotb 验证平台、编写 driver/monitor/scoreboard/参考模型、组织验证用例与回归、记录验证状态时
 ---
 
@@ -13,33 +13,43 @@ whenToUse: 当任务涉及搭建或扩展 cocotb 验证平台、编写 driver/mo
 设计文档（验证侧不读 RTL，例外与门禁见 dv-collab 第 1、3.1 节）；**输出**是
 `doc/yaml/bug.yaml`（BUG 交接）和 `sim/status.yaml`（验证状态）。
 
-## 主流程（固定顺序，不许跳步）
+## RTL 接触边界（单一事实源：dv-collab §1）
+
+不看设计内容（接口三级获取）、不改 RTL、flist 用设计侧给的——细则与
+门禁以 dv-collab §1 为唯一事实源，本文不再复制。验证侧附加的运行期
+黑盒要求（TB 只连顶层端口）见本文红线。
+
+## 主流程（消化输入后两线并行，正式用例过汇合门）
 
 1. **消化输入**：通读 spec.yaml，先确认所验版本的 `doc.stage`（confirmed
    才是签版基线；若验 draft 版须明确记录并预期其会变化），过一遍其中的
    "验证侧验收清单"；
    文档缺口/歧义一律登记 `doc/yaml/question.yaml`，存在未关闭的
    `blocking: true` 假设时，不得编写受影响的 checker。
-2. **建验证点表**：从 spec 的 functions/contract 逐条展开 VP，
-   每个 VP 填齐五要素（激励/观测/期望/checker/testcase）才许动手写代码。
-   规范见 `references/verification-points.md`。
-3. **搭平台骨架**：固定顺序——interface 信号封装 → driver → monitor
-   （握手拍采样）→ 参考模型 → scoreboard。各组件职责与纪律见
-   `references/platform-build.md`；DUT 为 `#0.1` NBA 风格时采样相位纪律
-   遵循 dv-collab 第 4 节，不在此重复。
-4. **smoke**：最小用例打通全链路（驱动→DUT→monitor→scoreboard 比对），
-   打通前不写正式用例。
-5. **checker 证伪**：每个 checker 配至少一个"必然失败"的反向用例，确认它
-   真的报警。checker 未证伪前，它判出的 PASS 不计入证据。规范见
-   `references/stimulus-and-checker.md`。
-6. **写正式用例**：定向（契约条款、边界、非法输入）→ 约束随机（组合空间、
+2. **两线并行**（消化输入完成后即可同时推进）：
+   - **验证点表**：从 spec 的 functions/contract 逐条展开 VP，五要素
+     （激励/观测/期望/checker/testcase）规范见
+     `references/verification-points.md`。
+   - **平台骨架 + smoke**：固定顺序——interface 信号封装 → driver →
+     monitor（握手拍采样）→ 参考模型 → scoreboard → smoke 最小用例
+     打通全链路。骨架只依赖 spec 接口段，不等 VP 表完成；工具链与
+     采样相位的不确定性在此最早暴露。组件职责与纪律见
+     `references/platform-build.md`；DUT 为 `#0.1` NBA 风格时采样
+     相位纪律遵循 dv-collab 第 4 节，不在此重复。
+   - **汇合门**：正式用例动手前，其覆盖的 VP 五要素必须填齐；
+     smoke 未打通前不写正式用例。
+3. **checker 证伪**（软约束）：默认每个 checker 都证明能抓错，豁免与
+   证据降级规则见 `references/stimulus-and-checker.md`；VP closed 仍
+   要求 checker 已证伪或已豁免。
+4. **写正式用例**：定向（契约条款、边界、非法输入）→ 约束随机（组合空间、
    反压模式）。随机用例 seed 必须进日志名。规范见
    `references/stimulus-and-checker.md`。
-7. **回归**：判过看日志实质（不看进程退出码），四态分类
+5. **回归**：判过看日志实质（不看进程退出码），四态分类
    （pass/fail/incomplete/interrupt）；失败先固化现场、固定 seed 复现，
    再改任何东西；确认 DUT 问题按 `bug.yaml` 交接。规范见
-   `references/regression.md`。
-8. **覆盖率与状态**：覆盖洞先分类（缺激励/采样错/约束阻挡/不可达/…）再
+   `references/regression.md`。自动化入口：`tools/regress.py`
+   （本 skill 自带，拷至工程 `sim/run/` 适配）。
+6. **覆盖率与状态**：覆盖洞先分类（缺激励/采样错/约束阻挡/不可达/…）再
    决定动作；每次回归后更新 `sim/status.yaml`。规范见
    `references/regression.md`、`references/status-tracking.md`。
 
@@ -48,26 +58,40 @@ whenToUse: 当任务涉及搭建或扩展 cocotb 验证平台、编写 driver/mo
 ```
 sim/
 ├── tb/             # cocotb 测试与组件（driver/monitor/refmodel/scoreboard）
-├── run/            # 回归脚本、Makefile、logs/、waves/、cov/
+├── run/            # regress.py + regress.yaml（init_sim.py 落位）、
+│                   # logs/、waves/、cov/
+├── tests/          # 用例（smoke → 定向 → 随机）
+├── tools/          # 工程内工具（build_native_mingw.sh 等）
 ├── vp_table.yaml   # 验证点表（五要素映射）
-├── status.yaml     # 验证状态（VP 状态/最近回归/未解释失败）
-└── templates/      # 可套用平台模板——【待补充】
+└── status.yaml     # 验证状态（VP 状态/最近回归/未解释失败，regress.py 维护）
 ```
 
-## 模板（待补充）
+## 模板与工具
 
-`sim/templates/` 计划放置可套用的 cocotb 组件骨架（driver/monitor/
-scoreboard/参考模型）与回归脚本。**当前为空，后续补充**；补充前按
-`references/platform-build.md` 的职责说明手写。
+- **平台脚手架**：`tools/init_sim.py`（本 skill 自带）——把 `templates/`
+  平台文件集固化进新工程 `sim/`：`python tools/init_sim.py <工程根>
+  [--module M] [--toplevel T] [--sim …] [--venv] [--force]`。幂等，
+  regress.yaml 自动渲染模块/顶层名，`--venv` 顺带建环境并重编 native 库。
+- **平台文件集**：`templates/`（示例工程 smoke 全绿后固化的通用骨架）——
+  env.sh、tb/（clocks/axi/apb/ref_model/scoreboard/env）、
+  tests/test_smoke.py、tools/build_native_mingw.sh（自定位）。
+  通用部分与逐文件适配点见 `templates/README.md`；纪律依据
+  `references/platform-build.md`。
+- **回归执行器**：`tools/regress.py` + 配置样例
+  `tools/regress.yaml.example`（init_sim.py 自动落位最新版）；职责见
+  `references/regression.md` 自动化节。
 
 ## 红线
 
-- 验证侧不读 RTL（例外见 dv-collab）；checker/参考模型只从
+- RTL 接触边界（不看设计内容/接口三级获取/不改 RTL/flist 用设计侧
+  给的）以 dv-collab §1 为唯一事实源；checker/参考模型只从
   spec + 设计文档推导。
+- TB 只驱动/采样 DUT 顶层端口，不做层级探针（hierarchical
+  reference）读内部信号——运行期黑盒与源码黑盒同等。
 - 不把"激励已生成"当"激励被接受"：覆盖率与配对以 monitor 在握手拍的
   采样为准。
 - 不凭猜测实现文档没写清的行为：先登记假设、先提问。
-- 不改 RTL。发现疑似 DUT 问题，走 `bug.yaml` 交接。
+- 发现疑似 DUT 问题，走 `bug.yaml` 交接，不自行改 RTL 试猜想。
 
 
 ## gap.yaml 功能遗漏对接（B 层独立提取，验证侧维护）

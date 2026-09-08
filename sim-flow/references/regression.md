@@ -49,3 +49,23 @@ fail 优先于 incomplete（先查错再查全）。任一用例 fail，回归�
   BUG/假设）；
 - 环境指纹：DUT 版本（commit/哈希）、TB 版本、工具版本；
 - 以上摘要更新进 `sim/status.yaml`（见 status-tracking.md）。
+
+## 自动化：regress.py
+
+`tools/regress.py`（sim-flow skill 自带，拷至工程 `sim/run/` 适配）把
+本节纪律落成工具：按 `regress.yaml` 逐用例独立子进程跑仿真（随机用例
+seed 进日志名、每用例超时兜底）、按四态规则扫日志分类、汇总产物清单
+（计数、未解释失败、环境指纹）、更新 `sim/status.yaml`、任一用例
+fail 非零退出。补充行为：
+
+- **失败复现命令落盘**：用例 fail/incomplete 时，摘要行下方打印精确复现
+  命令（`--case X [--seed N]`），并写进 `unexplained_failures[].repro`；
+- **seed 双变量兼容**：worker 进程同时设置 `COCOTB_RANDOM_SEED`（cocotb
+  2.x runner 自带）与旧变量 `RANDOM_SEED`，用例读哪个都拿到真实 seed；
+- **open_issues 派生**：regress.yaml 配置 `question:` 指向
+  doc/yaml/question.yaml 后，`status.yaml` 的
+  `question_blocking/question_open_nonblocking` 按 `closed_at` 缺失 +
+  `blocking` 字段自动派生，不再人工维护（`bugs`/`next_actions` 仍人工）。
+
+脚本是执行手段不是豁免：四态判定规则与失败处理纪律仍
+以本文为准；脚本判不明的归 incomplete，人工接手。

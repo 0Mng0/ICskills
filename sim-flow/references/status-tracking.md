@@ -53,3 +53,5 @@ next_actions:                        # 下一步打算，供会话恢复时接�
    并按 change_summary 重审受影响 VP（vp_table 状态回退 open）。
 4. 本文件只记状态，不记结论细节；细节去 vp_table.yaml / bug.yaml /
    回归日志里查。
+5. 本文件由 `regress.py` 自动重写（open_issues/next_actions 等字段
+   合并保留）；手写注释不保留，说明性内容写进 next_actions。
