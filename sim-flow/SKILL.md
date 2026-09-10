@@ -42,8 +42,10 @@ whenToUse: 当任务涉及搭建或扩展 cocotb 验证平台、编写 driver/mo
    证据降级规则见 `references/stimulus-and-checker.md`；VP closed 仍
    要求 checker 已证伪或已豁免。
 4. **写正式用例**：定向（契约条款、边界、非法输入）→ 约束随机（组合空间、
-   反压模式）。随机用例 seed 必须进日志名。规范见
-   `references/stimulus-and-checker.md`。
+   反压模式）；激励强度要求（循环证对、交织换向矩阵、边界强制必中、
+   零气泡链）与 seed fixed/random 口径见
+   `references/stimulus-and-checker.md` 激励强度节与随机纪律节。
+   随机用例 seed 必须进日志名。
 5. **回归**：判过看日志实质（不看进程退出码），四态分类
    （pass/fail/incomplete/interrupt）；失败先固化现场、固定 seed 复现，
    再改任何东西；确认 DUT 问题按 `bug.yaml` 交接。规范见
@@ -88,6 +90,15 @@ sim/
   spec + 设计文档推导。
 - TB 只驱动/采样 DUT 顶层端口，不做层级探针（hierarchical
   reference）读内部信号——运行期黑盒与源码黑盒同等。
+- **内部观测例外通道（严格受限）**：某功能点经外部端口**实在无法判定**
+  时，允许向设计侧询问关键内部信号的层级路径，登记进 VP 表
+  `internal_obs_requests`（信号/用途/设计提供的 rtl_path）后以
+  ReadOnly 只读采样作**辅助判据**。铁律：
+  1. **外部端口观测永远是主判定、优先级更高**——内部信号只作辅助佐证
+     与定位线索，不得单独作为 VP 判过依据；能走端口的判据一律走端口；
+  2. 登记前先在 VP 记录"外部为何判不了"，防例外滥用成常态；
+  3. 只接收设计侧给的路径，不借此翻阅 RTL 源码（源码黑盒不变）；
+     采样纪律同端口（RisingEdge + ReadOnly 只读）。
 - 不把"激励已生成"当"激励被接受"：覆盖率与配对以 monitor 在握手拍的
   采样为准。
 - 不凭猜测实现文档没写清的行为：先登记假设、先提问。
